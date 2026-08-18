@@ -1,0 +1,13 @@
+#///////////////////////////
+# Cocos Creator 3D Project
+#///////////////////////////
+library/
+temp/
+local/
+build/
+profiles/
+native
+node_modules/
+.vscode/
+.idea/
+gen_meta.js
