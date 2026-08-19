@@ -5,8 +5,10 @@
 // ============================================================
 import { _decorator, Component, Node, EventTouch, Graphics, Canvas, UITransform, Vec3, Camera, Prefab } from 'cc';
 import {
-    G, TOWER_STATS, TOWER_POSITIONS, MAX_LEVEL, TOTAL_WAVES, resetStateForBattle,
-    openingChars, ForgePiece, EnemyCfgExt,
+    G, TOWER_STATS, TOWER_POSITIONS, MAX_LEVEL, resetStateForBattle,
+    openingChars, ForgePiece, stageTotalWaves, registerStages, allStages,
+    registerMonsters, monsterRowCount, saveStageCleared, nextStageId, getStage,
+    StageCfg, loadProgress, unlockedStageId,
 } from './Config';
 import {
     hexColor, makeNode, makeLabel, fillRoundRect, strokeRoundRect, THEME, setTouchCamera,
@@ -15,29 +17,14 @@ import { BattleView, BattleApp } from './BattleView';
 import { ItemBar, ItemBarApp } from './ItemBar';
 import { ForgePanel, ForgeApp } from './ForgePanel';
 import { Modals, ModalsApp } from './Modals';
-import { EnemyConfig } from './EnemyConfig';
 import { TowerConfig } from './TowerConfig';
+import { StageConfig } from './StageConfig';
+import { MonsterRow } from './MonsterTableConfig';
 
 const { ccclass, property } = _decorator;
 
 const SCREEN_W = 390;
 const SCREEN_H = 844;
-
-// 波次刷怪条目（检查器中编辑）：波数 + 怪物预制体 + 数量 + 刷新间隔
-@ccclass('WaveEntry')
-class WaveEntry {
-    @property({ tooltip: '第几波（从 1 开始）' })
-    wave = 1;
-
-    @property({ type: Prefab, tooltip: '怪物预制体（根节点挂 EnemyConfig）' })
-    prefab: Prefab = null!;
-
-    @property({ tooltip: '数量' })
-    count = 5;
-
-    @property({ tooltip: '组内刷新间隔 ms' })
-    delay = 400;
-}
 
 // 字塔预制体条目（检查器中编辑）：挂 TowerConfig（可再挂 Sprite+Animation 序列帧）
 @ccclass('TowerPrefabEntry')
@@ -57,19 +44,28 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
     private waveText!: ReturnType<typeof makeLabel>;
     private forgeBlocker!: Node;
     private forgeBtnLabel!: ReturnType<typeof makeLabel>;
+    private homeStageLabel!: ReturnType<typeof makeLabel>;
+    private homeGrid!: Node;
+    private homePageLabel!: ReturnType<typeof makeLabel>;
+    private homePageIdx = 0;
+    private selectedStageId = 30001;
 
     battle!: BattleView;
     itemBar!: ItemBar;
     forge!: ForgePanel;
     modals!: Modals;
 
-    // 波次刷怪配置（编辑器检查器中编辑；为空时回退代码内 WAVE_CONFIG）
-    @property({ type: [WaveEntry], tooltip: '波次刷怪配置：同波数可加多条=多组怪依次刷新；为空则用内置配置' })
-    waveEntries: WaveEntry[] = [];
-
     // 字塔预制体配置（编辑器检查器中编辑；TowerConfig 数值覆盖内置，序列帧自动播放）
     @property({ type: [TowerPrefabEntry], tooltip: '字塔预制体：挂 TowerConfig（可加 Sprite+Animation 序列帧）' })
     towerPrefabs: TowerPrefabEntry[] = [];
+
+    // 关卡配置（编辑器检查器中编辑；非空时覆盖 Config.ts 内置关卡表）
+    @property({ type: [StageConfig], tooltip: '关卡配置：逐关编辑波次/怪物等级/小怪池/Boss/刷新节奏；为空则用内置表' })
+    stages: StageConfig[] = [];
+
+    // 怪物数值表（monster.xlsx 对应；先手动配几条跑通，后续批量导入）
+    @property({ type: [MonsterRow], tooltip: '怪物数值表：每行 = (类型,等级) 数值；缺行就近向下取，缺类型回退内置' })
+    monsters: MonsterRow[] = [];
 
     // 拖拽状态
     private drag: {
@@ -85,6 +81,20 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
     // 初始化
     // ============================================================
     onLoad() {
+        // 怪物数值表注册（monster.xlsx 对应；手动配置跑通后再批量导入）
+        registerMonsters(this.monsters.map(m => m.toStats()));
+        console.log(`[monster] 数值表 ${monsterRowCount()} 行` + (this.monsters.length === 0 ? '（未配置，怪物回退内置数值）' : ''));
+
+        // 编辑器关卡配置注册（非空时覆盖内置 STAGE_ROWS；外观预制体按名注册供表格引用）
+        if (this.stages.length > 0) {
+            for (const s of this.stages) s.registerPrefabs();
+            const list = this.stages.map(s => s.toCfg());
+            registerStages(list);
+            console.log(`[stage] 编辑器关卡 ${list.length} 关：${list.map(s => s.stageId).join(', ')}`);
+        } else {
+            console.log('[stage] 编辑器未配置关卡，使用内置表：', allStages().map(s => s.stageId).join(', '));
+        }
+
         // 相机自愈：UI 相机必须是正交投影 + UI 优先级，否则触摸命中测试失效
         const canvasComp = this.node.getComponent(Canvas);
         let cam: Camera | null = (canvasComp && canvasComp.cameraComponent) || null;
@@ -155,9 +165,12 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
         this.modals = new Modals(this.root, this);
 
         // 8. 主页（最顶层）
+        this.selectedStageId = unlockedStageId();
         this.buildHomeScene();
 
         this.showBattleUI(false);
+        this.rebuildHomeStageGrid();
+        this.refreshHomeStageLabel();
     }
 
     private buildTopBar() {
@@ -230,30 +243,145 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
         g.rect(-SCREEN_W / 2, -SCREEN_H / 2, SCREEN_W, SCREEN_H);
         g.fill();
 
-        makeLabel(n, '文 字 塔 防', 40, THEME.text).node.setPosition(0, 150);
-        makeLabel(n, '汉字象形守卫 · 原型', 14, THEME.muted, false).node.setPosition(0, 108);
+        makeLabel(n, '文 字 塔 防', 34, THEME.text).node.setPosition(0, 250);
+        makeLabel(n, '汉字象形守卫 · 原型', 12, THEME.muted, false).node.setPosition(0, 218);
+        makeLabel(n, '拖字上阵 · 拖字入盘合成 · 守住城堡', 11, THEME.muted, false).node.setPosition(0, 196);
 
-        const tips = [
-            '· 拖字上阵：物品栏的字拖到战场即部署',
-            '· 拖字入盘：独体字拖入打造盘，方块相连即可合成',
-            '· 守住城堡 5 波进攻即可获胜',
-        ];
-        tips.forEach((t, i) => {
-            makeLabel(n, t, 12, THEME.muted, false).node.setPosition(0, 40 - i * 24);
-        });
+        // 关卡选择面板
+        const panel = makeNode('stage-panel', 350, 330);
+        panel.setParent(n);
+        panel.setPosition(0, -5);
+        const pg = panel.addComponent(Graphics);
+        fillRoundRect(pg, -175, -165, 350, 330, 12, hexColor(THEME.panel));
+        strokeRoundRect(pg, -175, -165, 350, 330, 12, hexColor(THEME.border), 2);
 
-        const startBtn = makeNode('btn-start', 220, 64);
+        makeLabel(panel, '选择关卡', 15, THEME.text).node.setPosition(0, 138);
+        this.homePageLabel = makeLabel(panel, '', 11, THEME.muted, false);
+        this.homePageLabel.node.setPosition(0, 112);
+
+        this.homeGrid = makeNode('stage-grid', 350, 210);
+        this.homeGrid.setParent(panel);
+        this.homeGrid.setPosition(0, 0);
+
+        // 分页按钮
+        const mkPageBtn = (name: string, x: number, label: string, onTap: () => void) => {
+            const b = makeNode(name, 64, 36);
+            b.setParent(panel);
+            b.setPosition(x, -138);
+            const bg2 = b.addComponent(Graphics);
+            fillRoundRect(bg2, -32, -18, 64, 36, 10, hexColor('#2a3244'));
+            strokeRoundRect(bg2, -32, -18, 64, 36, 10, hexColor(THEME.border), 1);
+            makeLabel(b, label, 14, THEME.text);
+            b.on(Node.EventType.TOUCH_END, onTap);
+        };
+        mkPageBtn('page-prev', -60, '‹ 上一页', () => this.turnHomeStagePage(-1));
+        mkPageBtn('page-next', 60, '下一页 ›', () => this.turnHomeStagePage(1));
+        makeLabel(panel, '带锁图标 = 需先通过前一关解锁', 10, THEME.muted, false).node.setPosition(0, -108);
+
+        // 选中关卡提示 + 开始按钮
+        const stageLabel = makeLabel(n, '', 13, THEME.accent, false);
+        stageLabel.node.setPosition(0, -205);
+
+        const startBtn = makeNode('btn-start', 220, 56);
         startBtn.setParent(n);
-        startBtn.setPosition(0, -90);
+        startBtn.setPosition(0, -252);
         const bg = startBtn.addComponent(Graphics);
-        fillRoundRect(bg, -110, -32, 220, 64, 14, hexColor('#1f4a46'));
-        strokeRoundRect(bg, -110, -32, 220, 64, 14, hexColor(THEME.accent), 2);
-        makeLabel(startBtn, '开 始 战 斗', 20, '#eafffb');
+        fillRoundRect(bg, -110, -28, 220, 56, 14, hexColor('#1f4a46'));
+        strokeRoundRect(bg, -110, -28, 220, 56, 14, hexColor(THEME.accent), 2);
+        makeLabel(startBtn, '开 始 战 斗', 18, '#eafffb');
         startBtn.on(Node.EventType.TOUCH_END, () => {
-            this.startBattle();
+            this.startBattle(this.selectedStageId);
         });
 
+        this.homeStageLabel = stageLabel;
         this.homeScene = n;
+    }
+
+    // 主页关卡网格（backHome/初始化/翻页时重建）
+    private rebuildHomeStageGrid() {
+        if (!this.homeGrid) return;
+        this.homeGrid.removeAllChildren();
+        const stages = allStages();
+        if (stages.length === 0) return;
+
+        const cleared = loadProgress();
+        const clearedIdx = stages.findIndex(s => s.stageId === cleared);
+        const unlockedCount = (clearedIdx < 0 ? 0 : clearedIdx + 1) + 1; // 已通关数 + 当前解锁关
+        const PER_PAGE = 15, COLS = 5;
+        const pages = Math.max(1, Math.ceil(stages.length / PER_PAGE));
+        this.homePageIdx = Math.min(this.homePageIdx, pages - 1);
+        this.homePageLabel.string = `第 ${this.homePageIdx + 1} / ${pages} 页 · 已通关 ${Math.max(0, unlockedCount - 1)} / ${stages.length}`;
+
+        const CELL_W = 62, CELL_H = 58, GAP_X = 8, GAP_Y = 8;
+        const gridW = COLS * CELL_W + (COLS - 1) * GAP_X;
+        const start = this.homePageIdx * PER_PAGE;
+
+        for (let i = 0; i < PER_PAGE; i++) {
+            const idx = start + i;
+            if (idx >= stages.length) break;
+            const stage = stages[idx];
+            const col = i % COLS, row = Math.floor(i / COLS);
+            const x = -gridW / 2 + CELL_W / 2 + col * (CELL_W + GAP_X);
+            const y = (PER_PAGE / COLS / 2 - 0.5) * (CELL_H + GAP_Y) - row * (CELL_H + GAP_Y);
+            this.makeStageCell(this.homeGrid, stage, idx, idx < unlockedCount, idx <= clearedIdx && clearedIdx >= 0, x, y, CELL_W, CELL_H);
+        }
+    }
+
+    private makeStageCell(parent: Node, stage: StageCfg, idx: number, unlocked: boolean, cleared: boolean, x: number, y: number, w: number, h: number) {
+        const cell = makeNode(`stage-${stage.stageId}`, w, h);
+        cell.setParent(parent);
+        cell.setPosition(x, y);
+        const g = cell.addComponent(Graphics);
+        const selected = stage.stageId === this.selectedStageId;
+
+        let fill = '#262b38', border = '#3a4055', nameColor = '#5a6378';
+        if (unlocked) {
+            fill = cleared ? '#233c33' : '#1f4a46';
+            border = cleared ? '#4ecdc4' : THEME.accent;
+            nameColor = cleared ? '#9fe8de' : '#eafffb';
+        }
+        fillRoundRect(g, -w / 2, -h / 2, w, h, 8, hexColor(fill));
+        strokeRoundRect(g, -w / 2, -h / 2, w, h, 8, hexColor(border), selected ? 3 : 1);
+        if (selected) { // 选中高亮外圈
+            strokeRoundRect(g, -w / 2 - 3, -h / 2 - 3, w + 6, h + 6, 10, hexColor('#ffe082'), 2);
+        }
+
+        const shortName = (stage.note || '').split('，')[0] || `第${idx + 1}关`;
+        makeLabel(cell, shortName, 13, nameColor).node.setPosition(0, 8);
+        if (cleared) {
+            makeLabel(cell, '✓ 已通关', 9, '#7ce8c8', false).node.setPosition(0, -12);
+        } else if (!unlocked) {
+            // 锁图标（锁环圆 + 锁身矩形，复用同一 Graphics）
+            g.strokeColor = hexColor('#8a93a8');
+            g.lineWidth = 2;
+            g.circle(0, -8, 5);
+            g.stroke();
+            fillRoundRect(g, -7, -20, 14, 11, 2, hexColor('#5a6378'));
+        } else {
+            makeLabel(cell, '未通关', 9, '#c8b06a', false).node.setPosition(0, -12);
+        }
+
+        if (unlocked) {
+            cell.on(Node.EventType.TOUCH_END, () => {
+                this.selectedStageId = stage.stageId;
+                this.rebuildHomeStageGrid();
+                this.refreshHomeStageLabel();
+            });
+        }
+    }
+
+    private turnHomeStagePage(dir: number) {
+        const stages = allStages();
+        const pages = Math.max(1, Math.ceil(stages.length / 15));
+        this.homePageIdx = (this.homePageIdx + dir + pages) % pages;
+        this.rebuildHomeStageGrid();
+    }
+
+    // 主页关卡标签（backHome/初始化时刷新）
+    private refreshHomeStageLabel() {
+        if (!this.homeStageLabel) return;
+        const stage = getStage(this.selectedStageId);
+        this.homeStageLabel.string = `当前关卡：${stage ? (stage.note || stage.stageId) : this.selectedStageId}`;
     }
 
     // ============================================================
@@ -271,10 +399,11 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
         }
     }
 
-    startBattle() {
+    startBattle(stageId?: number) {
         this.homeScene.active = false;
         G.scene = 'battle';
         resetStateForBattle();
+        if (stageId) G.stageId = stageId; // 缺省 = 最新解锁关
         this.battle.clearVisuals();
         this.showBattleUI(true);
 
@@ -297,21 +426,23 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
         G.paused = false;
         G.gameOver = false;
         this.showBattleUI(false);
+        this.selectedStageId = unlockedStageId(); // 回主页默认选中最新解锁关
+        this.rebuildHomeStageGrid();
+        this.refreshHomeStageLabel();
         this.homeScene.active = true;
     }
 
     restartBattle() {
-        this.startBattle();
+        this.startBattle(G.stageId); // 重打当前关
     }
 
     private updateWaveText() {
         this.waveText.string = `第${G.wave + 1}波 / 共${this.totalWaves}波`;
     }
 
-    // 总波数：有编辑器配置取最大波数，否则用内置波数
+    // 总波数：读关卡表（stage.xlsx 数据源）
     private get totalWaves(): number {
-        if (!this.waveEntries.length) return TOTAL_WAVES;
-        return Math.max(...this.waveEntries.map(en => en.wave), 0);
+        return stageTotalWaves(G.stageId);
     }
 
     // ============================================================
@@ -366,26 +497,6 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
             if (tc && tc.charName === char) return en.prefab;
         }
         return null;
-    }
-
-    // 波次刷怪组：读取预制体上的 EnemyConfig 数据（不实例化节点）
-    getWaveGroups(wave: number): { type: string | EnemyCfgExt; count: number; delay: number }[] | null {
-        if (!this.waveEntries.length) return null;
-        const groups: { type: string | EnemyCfgExt; count: number; delay: number }[] = [];
-        for (const en of this.waveEntries) {
-            if (!en.prefab || en.wave !== wave + 1) continue;
-            const data = en.prefab.data as Node | null;
-            const ec = data ? data.getComponent(EnemyConfig) : null;
-            if (!ec) continue; // 预制体没挂 EnemyConfig：跳过该条
-            const cfg = ec.toSpawnCfg();
-            cfg.prefab = en.prefab; // 带上预制体引用：刷怪时实例化序列帧节点
-            groups.push({
-                type: cfg,
-                count: Math.max(1, Math.round(en.count)),
-                delay: Math.max(50, en.delay),
-            });
-        }
-        return groups.length ? groups : null;
     }
 
     // ============================================================
@@ -507,10 +618,22 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
     // ============================================================
     startNextWave() {
         if (G.wave + 1 >= this.totalWaves) {
+            saveStageCleared(G.stageId); // 记录通关进度（下一关解锁）
             this.modals.showResult(true);
             return;
         }
         this.battle.startNextWave();
+    }
+
+    // 下一关（胜利结算按钮）
+    startNextStage() {
+        const next = nextStageId(G.stageId);
+        if (next) this.startBattle(next);
+        else this.backHome();
+    }
+
+    hasNextStage(): boolean {
+        return nextStageId(G.stageId) !== null;
     }
 
     // ============================================================

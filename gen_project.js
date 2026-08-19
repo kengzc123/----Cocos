@@ -17,7 +17,7 @@ function compressUuid(uuid) {
 
 const root = __dirname;
 const scriptsDir = path.join(root, 'assets', 'scripts');
-const scripts = ['Config', 'Theme', 'BattleView', 'ForgePanel', 'ItemBar', 'Modals', 'GameApp'];
+const scripts = ['Config', 'Theme', 'BattleView', 'ForgePanel', 'ItemBar', 'Modals', 'GameApp', 'EnemyConfig', 'TowerConfig', 'StageConfig', 'MonsterTableConfig'];
 
 function writeMeta(file, obj) {
     fs.writeFileSync(file, JSON.stringify(obj, null, 2) + '\n');

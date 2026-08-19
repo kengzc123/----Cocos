@@ -23,7 +23,7 @@
     "_active": true,
     "_components": [],
     "_prefab": {
-      "__id__": 9
+      "__id__": 21
     },
     "_lpos": {
       "__type__": "cc.Vec3",
@@ -54,7 +54,7 @@
     },
     "autoReleaseAssets": false,
     "_globals": {
-      "__id__": 10
+      "__id__": 22
     },
     "_id": "402438c3-13de-41dc-916a-2ef6ecc69e71"
   },
@@ -250,22 +250,193 @@
     },
     "_enabled": true,
     "__prefab": null,
-    "waveEntries": [
+    "towerPrefabs": [],
+    "stages": [
       {
         "__id__": 8
+      }
+    ],
+    "monsters": [
+      {
+        "__id__": 15
+      },
+      {
+        "__id__": 16
+      },
+      {
+        "__id__": 17
+      },
+      {
+        "__id__": 18
+      },
+      {
+        "__id__": 19
+      },
+      {
+        "__id__": 20
       }
     ],
     "_id": "694VqxmY1O7KhtuGHd8kgr"
   },
   {
-    "__type__": "WaveEntry",
+    "__type__": "StageConfig",
+    "stageId": 30001,
+    "note": "",
+    "battleLevels": [
+      {
+        "__id__": 9
+      },
+      {
+        "__id__": 10
+      },
+      {
+        "__id__": 11
+      },
+      {
+        "__id__": 12
+      },
+      {
+        "__id__": 13
+      }
+    ],
+    "monsterPool": [
+      {
+        "type": 201,
+        "prefab": null
+      }
+    ],
+    "bossWaves": [
+      {
+        "__id__": 14
+      }
+    ],
+    "monsterNumMin": 1,
+    "monsterNumMax": 2,
+    "monsterCdMin": 5000,
+    "monsterCdMax": 5000,
+    "spawnDurationSec": 30,
+    "bossAtSec": 15
+  },
+  {
+    "__type__": "WaveLevelEntry",
     "wave": 1,
-    "prefab": {
-      "__uuid__": "de2e7c3c-37b3-461a-9cac-40259f4b6c66",
-      "__expectedType__": "cc.Prefab"
-    },
-    "count": 5,
-    "delay": 400
+    "level": 1
+  },
+  {
+    "__type__": "WaveLevelEntry",
+    "wave": 2,
+    "level": 2
+  },
+  {
+    "__type__": "WaveLevelEntry",
+    "wave": 3,
+    "level": 3
+  },
+  {
+    "__type__": "WaveLevelEntry",
+    "wave": 4,
+    "level": 4
+  },
+  {
+    "__type__": "WaveLevelEntry",
+    "wave": 5,
+    "level": 5
+  },
+  {
+    "__type__": "BossWaveEntry",
+    "wave": 1,
+    "type": 211,
+    "prefab": null
+  },
+  {
+    "__type__": "MonsterRow",
+    "type": 201,
+    "level": 1,
+    "displayName": "小近战怪 Lv1",
+    "isBoss": false,
+    "attack": 2,
+    "attackFar": 10,
+    "attackCd": 2000,
+    "blood": 10,
+    "speed": 1,
+    "buffTarget": "",
+    "buffEffect": 0,
+    "buffEffectPara": 0
+  },
+  {
+    "__type__": "MonsterRow",
+    "type": 201,
+    "level": 2,
+    "displayName": "小近战怪 Lv2",
+    "isBoss": false,
+    "attack": 2,
+    "attackFar": 10,
+    "attackCd": 2000,
+    "blood": 50,
+    "speed": 1,
+    "buffTarget": "",
+    "buffEffect": 0,
+    "buffEffectPara": 0
+  },
+  {
+    "__type__": "MonsterRow",
+    "type": 201,
+    "level": 3,
+    "displayName": "小近战怪 Lv3",
+    "isBoss": false,
+    "attack": 2,
+    "attackFar": 10,
+    "attackCd": 2000,
+    "blood": 99.7,
+    "speed": 1,
+    "buffTarget": "",
+    "buffEffect": 0,
+    "buffEffectPara": 0
+  },
+  {
+    "__type__": "MonsterRow",
+    "type": 201,
+    "level": 4,
+    "displayName": "小近战怪 Lv4",
+    "isBoss": false,
+    "attack": 2,
+    "attackFar": 10,
+    "attackCd": 2000,
+    "blood": 300,
+    "speed": 1,
+    "buffTarget": "",
+    "buffEffect": 0,
+    "buffEffectPara": 0
+  },
+  {
+    "__type__": "MonsterRow",
+    "type": 201,
+    "level": 5,
+    "displayName": "小近战怪 Lv5",
+    "isBoss": false,
+    "attack": 2,
+    "attackFar": 10,
+    "attackCd": 2000,
+    "blood": 400,
+    "speed": 1,
+    "buffTarget": "",
+    "buffEffect": 0,
+    "buffEffectPara": 0
+  },
+  {
+    "__type__": "MonsterRow",
+    "type": 211,
+    "level": 1,
+    "displayName": "近战重甲boss Lv1",
+    "isBoss": true,
+    "attack": 2,
+    "attackFar": 10,
+    "attackCd": 2000,
+    "blood": 500,
+    "speed": 2,
+    "buffTarget": "",
+    "buffEffect": 0,
+    "buffEffectPara": 0
   },
   {
     "__type__": "cc.PrefabInfo",
@@ -278,28 +449,28 @@
   {
     "__type__": "cc.SceneGlobals",
     "ambient": {
-      "__id__": 11
+      "__id__": 23
     },
     "shadows": {
-      "__id__": 12
+      "__id__": 24
     },
     "_skybox": {
-      "__id__": 13
+      "__id__": 25
     },
     "fog": {
-      "__id__": 14
+      "__id__": 26
     },
     "octree": {
-      "__id__": 15
+      "__id__": 27
     },
     "skin": {
-      "__id__": 16
+      "__id__": 28
     },
     "lightProbeInfo": {
-      "__id__": 17
+      "__id__": 29
     },
     "postSettings": {
-      "__id__": 18
+      "__id__": 30
     },
     "bakedWithStationaryMainLight": false,
     "bakedWithHighpLightmap": false

@@ -15,6 +15,8 @@ export interface ModalsApp {
     startNextWave(): void;
     backHome(): void;
     restartBattle(): void;
+    startNextStage(): void;   // 进入下一关
+    hasNextStage(): boolean;  // 当前关之后还有关卡
     refreshItemBar(): void;
     showTip(text: string, cls: 'error' | 'ok' | ''): void;
 }
@@ -190,18 +192,28 @@ export class Modals {
         const sub = makeLabel(panel, win ? '城堡守卫成功！' : '城堡被攻破了…', 13, THEME.muted, false);
         sub.node.setPosition(0, 32);
 
-        const btn = makeNode(win ? 'btn-home' : 'btn-restart', 220, 56);
-        btn.setParent(panel);
-        btn.setPosition(0, -72);
-        const g = btn.addComponent(Graphics);
-        fillRoundRect(g, -110, -28, 220, 56, 12, hexColor(win ? '#2a6f6a' : '#5a2a35'));
-        strokeRoundRect(g, -110, -28, 220, 56, 12, hexColor(win ? '#4ecdc4' : '#e94560'), 2);
-        makeLabel(btn, win ? '返回主页' : '重新开始', 18, '#ffffff');
-        btn.on(Node.EventType.TOUCH_END, () => {
-            this.resultRoot.active = false;
-            if (win) this.app.backHome();
-            else this.app.restartBattle();
-        });
+        const mkBtn = (name: string, x: number, w: number, label: string, fill: string, stroke: string, onTap: () => void) => {
+            const btn = makeNode(name, w, 56);
+            btn.setParent(panel);
+            btn.setPosition(x, -72);
+            const g = btn.addComponent(Graphics);
+            fillRoundRect(g, -w / 2, -28, w, 56, 12, hexColor(fill));
+            strokeRoundRect(g, -w / 2, -28, w, 56, 12, hexColor(stroke), 2);
+            makeLabel(btn, label, 17, '#ffffff');
+            btn.on(Node.EventType.TOUCH_END, () => {
+                this.resultRoot.active = false;
+                onTap();
+            });
+        };
+
+        if (win && this.app.hasNextStage()) {
+            mkBtn('btn-next-stage', -60, 120, '下一关', '#2a6f6a', '#4ecdc4', () => this.app.startNextStage());
+            mkBtn('btn-home', 70, 110, '主页', '#3a4055', '#8a93a8', () => this.app.backHome());
+        } else {
+            mkBtn(win ? 'btn-home' : 'btn-restart', 0, 220, win ? '返回主页' : '重新开始',
+                win ? '#2a6f6a' : '#5a2a35', win ? '#4ecdc4' : '#e94560',
+                () => win ? this.app.backHome() : this.app.restartBattle());
+        }
 
         this.resultRoot.active = true;
     }

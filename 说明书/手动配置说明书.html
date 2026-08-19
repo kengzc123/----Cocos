@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文字塔防 · 手动配置说明书（编辑器版）</title>
+<style>
+  :root {
+    --ink: #1f2329; --muted: #6b7280; --line: #e5e7eb; --bg: #ffffff;
+    --panel: #f8f9fb; --brand: #7c5cff; --brand-soft: #f0ecff;
+    --ok: #16a34a; --warn: #d97706; --err: #dc2626; --code-bg: #f4f4f5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.75 "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  }
+  .page { max-width: 860px; margin: 0 auto; padding: 40px 48px 80px; }
+  header { border-bottom: 3px solid var(--brand); padding-bottom: 16px; margin-bottom: 28px; }
+  header h1 { margin: 0 0 6px; font-size: 24px; }
+  header .meta { color: var(--muted); font-size: 12.5px; }
+  h2 {
+    font-size: 18px; margin: 40px 0 14px; padding-left: 10px;
+    border-left: 4px solid var(--brand); line-height: 1.4;
+  }
+  h3 { font-size: 15px; margin: 24px 0 8px; }
+  p { margin: 8px 0; }
+  ul, ol { margin: 8px 0; padding-left: 24px; }
+  li { margin: 4px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+  th, td { border: 1px solid var(--line); padding: 7px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel); font-weight: 600; white-space: nowrap; }
+  tr:nth-child(even) td { background: #fcfcfd; }
+  code, .path {
+    font-family: Consolas, "Courier New", monospace; font-size: 12.5px;
+    background: var(--code-bg); padding: 1px 6px; border-radius: 4px;
+  }
+  .callout {
+    border-radius: 8px; padding: 12px 16px; margin: 14px 0; font-size: 13.5px;
+    border: 1px solid var(--line); background: var(--panel);
+  }
+  .callout.tip { border-color: #bbe4bb; background: #f2fbf2; }
+  .callout.warn { border-color: #f3d9a4; background: #fdf8ee; }
+  .callout b.tag { display: inline-block; margin-right: 6px; }
+  .tag-tip { color: var(--ok); } .tag-warn { color: var(--warn); }
+  .steps { counter-reset: step; list-style: none; padding-left: 0; }
+  .steps > li {
+    counter-increment: step; position: relative; padding: 6px 0 6px 44px; margin: 0;
+  }
+  .steps > li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 8px; width: 28px; height: 28px;
+    border-radius: 50%; background: var(--brand); color: #fff;
+    font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center;
+  }
+  .check { list-style: none; padding-left: 4px; }
+  .check li { padding-left: 26px; position: relative; }
+  .check li::before {
+    content: "✓"; position: absolute; left: 2px; color: var(--ok); font-weight: 700;
+  }
+  .toc { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 22px; font-size: 13.5px; }
+  .toc a { color: var(--ink); text-decoration: none; }
+  .toc a:hover { color: var(--brand); }
+  .toc ol { margin: 6px 0; columns: 2; column-gap: 40px; }
+  footer { margin-top: 60px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--line); padding-top: 12px; }
+  @media print { .page { padding: 0; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header>
+  <h1>文字塔防 · 手动配置说明书（编辑器版）</h1>
+  <div class="meta">适用工程：文字塔防Cocos（Cocos Creator 3.8.x）｜ 数据来源：策划 stage.xlsx（50 关）+ monster.xlsx（14 类型 × 100 级）｜ 更新日期：2026-08-19</div>
+</header>
+
+<div class="toc">
+  <b>目录</b>
+  <ol>
+    <li><a href="#model">数据模型总览（三层职责）</a></li>
+    <li><a href="#prep">准备工作</a></li>
+    <li><a href="#prefab">配置怪物外观预制体</a></li>
+    <li><a href="#monsters">配置怪物数值表（monsters）</a></li>
+    <li><a href="#stages">配置关卡（stages）</a></li>
+    <li><a href="#verify">运行验证与日志对照</a></li>
+    <li><a href="#faq">常见问题</a></li>
+    <li><a href="#batch">批量导入预告</a></li>
+  </ol>
+</div>
+
+<!-- ============ 1 ============ -->
+<h2 id="model">一、数据模型总览（三层职责）</h2>
+<p>一个怪物在游戏里由三层信息组成，<b>数值与外观彻底分离</b>：</p>
+<table>
+  <tr><th>层</th><th>配置位置</th><th>决定什么</th><th>对应策划表</th></tr>
+  <tr>
+    <td><b>① 外观预制体</b></td>
+    <td>Assets 里的 Prefab 资产</td>
+    <td>怪物长什么样（单帧 Sprite 或序列帧 Animation）；<b>不含任何数值</b></td>
+    <td>monster 表动画列（预留）</td>
+  </tr>
+  <tr>
+    <td><b>② 怪物数值表</b></td>
+    <td>Canvas 节点 → GameApp → <code>monsters</code> 数组</td>
+    <td>血量 / 攻击 / 攻击范围 / 攻击间隔 / 速度（按<b>类型 × 等级</b>一行一条）</td>
+    <td>monster.xlsx</td>
+  </tr>
+  <tr>
+    <td><b>③ 关卡配置</b></td>
+    <td>Canvas 节点 → GameApp → <code>stages</code> 数组</td>
+    <td>几波、每波怪物等级、小怪池、哪波出哪个 Boss、刷新节奏</td>
+    <td>stage.xlsx</td>
+  </tr>
+</table>
+<p>关联规则一句话：<b>关卡按「波次等级」到数值表查行拿数值，按「类型号」找同名预制体当外观。</b></p>
+<div class="callout tip"><b class="tag tag-tip">提示</b>预制体没配也能跑：怪物直接显示<b>数值表名字文本</b>（如「小近战怪 Lv1」，Boss 显示「近战重甲boss Lv16」并带金圈），颜色按类型区分，正好用来核对导入数据；数值表该类型没配则回退内置数值并打告警日志。</div>
+
+<!-- ============ 2 ============ -->
+<h2 id="prep">二、准备工作</h2>
+<ol class="steps">
+  <li>用 Cocos Creator 3.8.x 打开工程目录 <span class="path">文字塔防Cocos</span></li>
+  <li>在「资源管理器」双击打开场景 <span class="path">assets/Main.scene</span></li>
+  <li>在「层级管理器」选中 <b>Canvas</b> 节点（挂 GameApp 组件的那个）</li>
+  <li>右侧「属性检查器」向下滑，能看到两个数组属性：<b>关卡配置（stages）</b> 和 <b>怪物数值表（monsters）</b>，以及「字塔预制体配置」——本文只涉及前两个</li>
+</ol>
+<div class="callout warn"><b class="tag tag-warn">注意</b>不要运行 <code>gen_project.js</code>，它会重写场景并清空编辑器里配置的数据。</div>
+
+<!-- ============ 3 ============ -->
+<h2 id="prefab">三、配置怪物外观预制体</h2>
+<h3>3.1 命名规则（重要）</h3>
+<p>预制体文件名 <b>= 怪物类型号</b>，这是自动配对的依据：</p>
+<table>
+  <tr><th>类型号</th><th>怪物</th><th>预制体文件名</th></tr>
+  <tr><td>201</td><td>小近战怪</td><td><code>201.prefab</code></td></tr>
+  <tr><td>202</td><td>小远程怪</td><td><code>202.prefab</code></td></tr>
+  <tr><td>204</td><td>高速小怪</td><td><code>204.prefab</code></td></tr>
+  <tr><td>205</td><td>坦克小怪</td><td><code>205.prefab</code></td></tr>
+  <tr><td>211 ~ 220</td><td>十个 Boss</td><td><code>211.prefab</code> … <code>220.prefab</code></td></tr>
+</table>
+<h3>3.2 制作步骤（以 201 为例）</h3>
+<ol class="steps">
+  <li>在场景里新建空节点，命名为 <code>201</code></li>
+  <li>挂外观：加 <b>Sprite</b> 组件拖入单帧图片；序列帧则再加 <b>Animation</b> 组件并勾选 <b>Play On Load</b></li>
+  <li><b>不需要挂任何脚本组件</b>（数值不读预制体）</li>
+  <li>（可选）建议放到 <span class="path">assets/resources/enemies/</span> 目录下，与后续批量导入的约定一致</li>
+  <li>把节点从层级管理器拖回资源管理器存为预制体，然后从场景里删掉该节点</li>
+</ol>
+<div class="callout tip"><b class="tag tag-tip">提示</b>同一类型的所有等级共用一个预制体——201 的 Lv1 和 Lv100 长一样，只是数值不同。血条、状态圈由代码绘制，不用做进预制体。</div>
+
+<!-- ============ 4 ============ -->
+<h2 id="monsters">四、配置怪物数值表（monsters）</h2>
+<p>数组里每个条目 = monster.xlsx 的一行 = 某类型某等级的数值。新条目默认值即 201 Lv1 的表值。</p>
+<h3>4.1 字段说明</h3>
+<table>
+  <tr><th>字段</th><th>含义</th><th>约束 / 默认</th></tr>
+  <tr><td>type</td><td>怪物类型号</td><td>201/202/204/205 小怪；211~220 Boss</td></tr>
+  <tr><td>level</td><td>怪物等级</td><td>1~100；monsterId 自动 = type×100+level</td></tr>
+  <tr><td>displayName</td><td>备注名</td><td>如「小近战怪 Lv1」，仅日志显示</td></tr>
+  <tr><td>isBoss</td><td>是否 Boss</td><td>Boss 类型务必勾上</td></tr>
+  <tr><td>attack</td><td>攻击力（对城堡每次伤害）</td><td>≥0</td></tr>
+  <tr><td>attackFar</td><td>攻击范围（<b>像素</b>，与战场坐标 1:1）</td><td>近战约 10，远程 200</td></tr>
+  <tr><td>attackCd</td><td>攻击冷却（ms）</td><td>≥200</td></tr>
+  <tr><td>blood</td><td>血量</td><td>≥1</td></tr>
+  <tr><td>speed</td><td>移动速度</td><td>运行时 ×60 px/s；小怪 1~6，Boss 2</td></tr>
+  <tr><td>buffTarget / buffEffect / buffEffectPara</td><td>buff 三列</td><td><b>已导入暂不生效</b>，仅打日志，先照表填即可</td></tr>
+</table>
+<h3>4.2 示例：跑通第 1 关（30001）最少要配 5 行</h3>
+<p>30001 的波次等级是 1 / 4 / 7 / 10 / 13，全部刷 201，按下表从 monster.xlsx 抄数：</p>
+<table>
+  <tr><th>type</th><th>level</th><th>displayName</th><th>isBoss</th><th>attack</th><th>attackFar</th><th>attackCd</th><th>blood</th><th>speed</th></tr>
+  <tr><td>201</td><td>1</td><td>小近战怪 Lv1</td><td>否</td><td>2</td><td>10</td><td>2000</td><td>10</td><td>3</td></tr>
+  <tr><td>201</td><td>4</td><td>小近战怪 Lv4</td><td>否</td><td>2</td><td>10</td><td>2000</td><td>13</td><td>3</td></tr>
+  <tr><td>201</td><td>7</td><td>小近战怪 Lv7</td><td>否</td><td>3</td><td>10</td><td>2000</td><td>16</td><td>3</td></tr>
+  <tr><td>201</td><td>10</td><td>小近战怪 Lv10</td><td>否</td><td>3</td><td>10</td><td>2000</td><td>20</td><td>3</td></tr>
+  <tr><td>201</td><td>13</td><td>小近战怪 Lv13</td><td>否</td><td>4</td><td>10</td><td>2000</td><td>25</td><td>3</td></tr>
+</table>
+<h3>4.3 示例：跑通第 2、3 关再加 Boss 行</h3>
+<table>
+  <tr><th>type</th><th>level</th><th>displayName</th><th>isBoss</th><th>attack</th><th>attackFar</th><th>attackCd</th><th>blood</th><th>speed</th></tr>
+  <tr><td>211</td><td>16</td><td>近战重甲boss Lv16</td><td><b>是</b></td><td>24</td><td>10</td><td>2000</td><td>317</td><td>2</td></tr>
+  <tr><td>212</td><td>19</td><td>远程射手boss Lv19</td><td><b>是</b></td><td>23</td><td>200</td><td>1800</td><td>320</td><td>2</td></tr>
+</table>
+<div class="callout warn"><b class="tag tag-warn">注意</b>关卡里的 Boss 等级用的是<b>该波 battleLevel 的等级</b>（30002 第 5 波是 Lv16，Boss 也按 Lv16 查行），不是 1 级。缺等级行时同类型就近向下取并打告警。</div>
+
+<!-- ============ 5 ============ -->
+<h2 id="stages">五、配置关卡（stages）</h2>
+<p>数组每个条目 = stage.xlsx 的一行 = 一个关卡。新条目默认模板即第 1 关的形状。</p>
+<h3>5.1 字段说明</h3>
+<table>
+  <tr><th>字段</th><th>对应表列</th><th>说明</th></tr>
+  <tr><td>stageId / note</td><td>stageId / 备注</td><td>关卡 id（30001 起）与备注</td></tr>
+  <tr><td>battleLevels</td><td>battleLevel</td><td>波次+等级列表，<b>条目数 = 总波数</b>；等级对小怪和 Boss 同时生效</td></tr>
+  <tr><td>monsterPool</td><td>monsterType</td><td>小怪池：每条 = type（数值）+ prefab（可选外观预制体）</td></tr>
+  <tr><td>bossWaves</td><td>boss</td><td>每条 = 波次 + Boss 类型（211~220）+ 可选外观预制体；<b>清空 = 本关无 Boss</b></td></tr>
+  <tr><td>monsterNumMin / Max</td><td>monsterNum</td><td>单次生成数量区间（随机取）</td></tr>
+  <tr><td>monsterCdMin / Max</td><td>monsterCd</td><td>两次生成间隔区间 ms（随机取）</td></tr>
+  <tr><td>spawnDurationSec</td><td>time[0]</td><td>每波小怪刷新持续时长（秒）</td></tr>
+  <tr><td>bossAtSec</td><td>time[1]</td><td>Boss 出场时刻（秒，相对本波开始）；无 Boss 的波忽略</td></tr>
+</table>
+<h3>5.2 示例：第 1 关（30001，引导关无 Boss）</h3>
+<table>
+  <tr><th>字段</th><th>配置值</th></tr>
+  <tr><td>stageId / note</td><td>30001 / 第1关，5波（引导关，无boss）</td></tr>
+  <tr><td>battleLevels</td><td>5 条：wave=1 level=1｜wave=2 level=4｜wave=3 level=7｜wave=4 level=10｜wave=5 level=13</td></tr>
+  <tr><td>monsterPool</td><td>1 条：type=201，prefab 拖入 201 预制体（或留空）</td></tr>
+  <tr><td>bossWaves</td><td><b>清空（0 条）</b></td></tr>
+  <tr><td>monsterNumMin / Max</td><td>2 / 3</td></tr>
+  <tr><td>monsterCdMin / Max</td><td>1000 / 2000</td></tr>
+  <tr><td>spawnDurationSec / bossAtSec</td><td>30 / 15（无 Boss 时 bossAt 不生效）</td></tr>
+</table>
+<h3>5.3 示例：第 2 关（30002，第 5 波出 Boss 211）</h3>
+<p>在 30001 基础上改：battleLevels 换成 Lv 4/7/10/13/16；bossWaves 留 1 条（wave=5, type=211, prefab 拖 211 预制体）；monsterCd 改 990/1980；bossAtSec=15。同时确认数值表已有 211 Lv16 行（见 4.3）。</p>
+<div class="callout tip"><b class="tag tag-tip">提示</b>进游戏默认打关卡数组<b>第一条</b>；要测别的关，把目标关拖到数组首位即可。</div>
+
+<!-- ============ 6 ============ -->
+<h2 id="verify">六、运行验证与日志对照</h2>
+<p>点击编辑器上方「预览」运行，打开控制台（预览窗口按 F12 或编辑器「开发者 → 控制台」），对照：</p>
+<table>
+  <tr><th>日志</th><th>含义</th><th>正常?</th></tr>
+  <tr><td><code>[monster] 数值表 5 行</code></td><td>数值表注册成功；显示 0 行 = 未配置，走内置数值</td><td>✓</td></tr>
+  <tr><td><code>[stage] 编辑器关卡 30001</code></td><td>编辑器关卡生效</td><td>✓</td></tr>
+  <tr><td><code>[stage] 编辑器未配置关卡，使用内置表：30001, 30002, 30003</code></td><td>stages 为空，用 Config.ts 内置 3 关</td><td>✓（正常回退）</td></tr>
+  <tr><td><code>[monster] 类型201 Lv13 无精确行，就近取 Lv10…</code></td><td>缺该等级行，向下就近取</td><td>⚠ 补行</td></tr>
+  <tr><td><code>[monster] 数值表缺 类型201 Lv13，回退内置 melee×…</code></td><td>该类型一行都没有，回退内置数值</td><td>⚠ 至少配 1 行</td></tr>
+  <tr><td><code>[buff] 未生效 type=211 lv=16 …</code></td><td>buff 列已导入暂未实现（预期行为，每行一次）</td><td>✓ 预期</td></tr>
+</table>
+<h3>验证清单</h3>
+<ul class="check">
+  <li>启动日志显示数值表行数与所配行数一致，无「缺行/回退」告警</li>
+  <li>第 1 关 5 波：怪物血量逐波变厚（10→13→16→20→25）</li>
+  <li>拖了预制体的类型，场上显示预制体画面；没拖的显示名字文本（如「小近战怪 Lv13」）+ 血条</li>
+  <li>每波开始有 10 秒准备倒计时；波内每 1~2 秒刷 2~3 只小怪，持续 30 秒</li>
+  <li>清完场自动进下一波；5 波打完结算胜利</li>
+  <li>胜利结算出现「下一关 / 主页」双按钮；点下一关直接进 30002；主页开始按钮上方显示「当前关卡：第2关」</li>
+</ul>
+<h3>关卡进度（连胜机制）</h3>
+<div class="callout"><b class="tag">机制</b>通关进度存在本地（<code>sys.localStorage</code>，key <code>wztd_progress_v1</code>），重启游戏不丢：
+<ul>
+  <li><b>主页关卡选择</b>：关卡网格（每页 15 个，可翻页）——绿色「✓ 已通关」可点，青色「未通关」当前解锁关可点，带锁图标的未解锁（需先过前一关）；点选后按「开始战斗」进入</li>
+  <li><b>胜利</b> → 记录该关已通关，结算弹窗出现「<b>下一关</b> / 主页」双按钮（当前是最后一关时只有「返回主页」）</li>
+  <li><b>失败</b> → 「重新开始」重打当前关（进度不变）</li>
+  <li><b>回主页</b> → 默认选中最新解锁关；之前的通关关卡随时可回头再打</li>
+  <li>关卡顺序按关卡表（stages）排列顺序，与 stageId 升序一致</li>
+</ul>
+<p>测试想重置进度：预览控制台执行 <code>cc.sys.localStorage.removeItem('wztd_progress_v1')</code> 后刷新。</p></div>
+
+<!-- ============ 7 ============ -->
+<h2 id="faq">七、常见问题</h2>
+<h3>Q1：怪物刷出来显示的是名字文字，不是我的预制体？</h3>
+<p>名字文本 = 未配预制体时的默认显示。检查关卡 monsterPool / bossWaves 条目里 prefab 槽是否拖入了预制体；type 只决定数值，外观必须在该条目的 prefab 槽拖入。</p>
+<h3>Q2：日志报「就近取 LvX」？</h3>
+<p>关卡波次等级在数值表里没有对应行。两个选择：按 monster.xlsx 补该行；或不管它（就近向下取值也能跑，但数值偏弱）。</p>
+<h3>Q3：Boss 不出来？</h3>
+<p>依次检查：① bossWaves 有条目且波次号 ≤ 总波数；② <b>数值表里该 Boss 类型的 isBoss 已勾选</b>；③ bossAtSec 小于本波实际时长；④ boss 条目的类型号写对（211~220，老表的 203 已废弃）。</p>
+<h3>Q4：attackFar 填多少？</h3>
+<p>按表填，单位像素，战场坐标 1:1：近战怪与多数 Boss 填 10（贴脸才打），远程怪与远程 Boss 填 200（离很远就停下攻击）。</p>
+<h3>Q5：speed 数值好小（3、2），对吗？</h3>
+<p>对。表值按「每帧位移」记录，运行时自动 ×60 换算成 px/s。小怪 1（坦克）~6（高速），Boss 2。</p>
+<h3>Q6：编辑器里改了数据没生效？</h3>
+<p>确认改的是场景里 Canvas 上的属性并已保存场景（Ctrl+S），然后重新点预览运行。游戏运行中改属性不会热更。</p>
+<h3>Q7：之前配过的关卡数据丢了？</h3>
+<p>本轮改版字段有更名（monsterPrefabs → monsterPool、Boss 由预制体改为类型号），旧数据不兼容需按新结构重配一次；或运行过 <code>gen_project.js</code> 重置了场景。</p>
+
+<!-- ============ 8 ============ -->
+<h2 id="batch">八、批量导入预告（编辑器链路跑通后实施）</h2>
+<p>手动配数验证通过后，将提供导表脚本实现全自动导入，手动配置届时仅用于临时调参：</p>
+<ul>
+  <li><span class="path">tools/export_tables.js</span>：读 stage.xlsx + monster.xlsx → 生成 <span class="path">assets/resources/stages.json</span> + <span class="path">monsters.json</span>（50 关 + 1400 行全量）</li>
+  <li>预制体按「文件名 = 类型号」自动配对（<code>201.prefab</code> → 类型 201），无需在关卡里手拖</li>
+  <li>导出前自动校验：monsterId 唯一、类型×等级连续、关卡引用覆盖、Boss 标记、time 单值容错</li>
+  <li>优先级：json 导入 &gt; 编辑器配置 &gt; 内置表</li>
+  <li>策划工作流：改表 → 双击导出 → 进游戏即生效</li>
+</ul>
+
+<footer>文字塔防原型 · 手动配置说明书 v1.0 ｜ 工程目录：e:\易游记灵境\文字塔防最新\文字塔防Cocos ｜ 配套代码：Config.ts / StageConfig.ts / MonsterTableConfig.ts / BattleView.ts</footer>
+</div>
+</body>
+</html>

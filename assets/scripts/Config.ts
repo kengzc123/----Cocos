@@ -2,7 +2,7 @@
 // 数据定义：按《文字塔防》原型策划需求文档（定版）配置
 // 设计分辨率 390×844，所有距离/尺寸与原型像素值 1:1 对应
 // ============================================================
-import { Prefab, Node } from 'cc';
+import { Prefab, Node, sys } from 'cc';
 
 // ---------- 字体系 ----------
 
@@ -153,16 +153,223 @@ export function nextBossDef() {
     return d;
 }
 
-// ---------- 波次配置（共 5 波，节奏为刷新间隔 ms） ----------
-export const WAVE_CONFIG = [
-    { enemies: [{ type: 'melee', count: 5 }], delay: 500 },
-    { enemies: [{ type: 'melee', count: 5 }, { type: 'ranged', count: 3 }], delay: 400 },
-    { enemies: [{ type: 'melee', count: 8 }, { type: 'ranged', count: 5 }], delay: 350 },
-    { enemies: [{ type: 'melee', count: 10 }, { type: 'ranged', count: 8 }], delay: 300 },
-    { enemies: [{ type: 'melee', count: 12 }, { type: 'ranged', count: 8 }, { type: 'boss', count: 1 }], delay: 250 },
+// ---------- 关卡表（数据源：策划 stage.xlsx，新增关卡在 STAGE_ROWS 加行） ----------
+// ---------- 怪物数值表（数据源：策划 monster.xlsx，monsterId = type×100 + level） ----------
+export interface MonsterStats {
+    monsterId: number;    // type*100+level
+    type: number;         // 201/202/204/205 小怪；211-220 Boss
+    level: number;        // 1-100（battleLevel 按波次取）
+    name: string;         // 备注
+    isBoss: boolean;
+    attack: number;       // 攻击力
+    attackFar: number;    // 攻击范围（像素，与逻辑坐标 1:1）
+    attackCd: number;     // 攻击冷却 ms
+    blood: number;        // 血量
+    speed: number;        // 移动速度（运行时 ×60 px/s）
+    buffTarget?: string;  // 已导入未生效（仅日志）
+    buffEffect?: number;  // 已导入未生效（仅日志）
+    buffEffectPara?: number;
+}
+
+const monsterDB = new Map<number, MonsterStats>();
+const monsterWarned = new Set<number>();
+
+// 注册怪物数值行（编辑器 MonsterRow / 后续批量导入）
+export function registerMonsters(list: MonsterStats[]) {
+    for (const m of list) monsterDB.set(m.monsterId, m);
+}
+
+export function monsterRowCount(): number {
+    return monsterDB.size;
+}
+
+// 查 (类型, 等级)：精确 → 同类型就近向下取（告警一次）→ null（调用方走内置兜底）
+export function getMonsterStats(type: number, level: number): MonsterStats | null {
+    const exact = monsterDB.get(type * 100 + level);
+    if (exact) return exact;
+    let best: MonsterStats | null = null;
+    for (const m of monsterDB.values()) {
+        if (m.type !== type || m.level > level) continue;
+        if (!best || m.level > best.level) best = m;
+    }
+    if (best && !monsterWarned.has(type * 100 + level)) {
+        monsterWarned.add(type * 100 + level);
+        console.warn(`[monster] 类型${type} Lv${level} 无精确行，就近取 Lv${best.level}（${best.name}）`);
+    }
+    return best;
+}
+
+// 类型是否为 Boss（按数值表任一行判断）
+export function monsterTypeIsBoss(type: number): boolean {
+    for (const m of monsterDB.values()) if (m.type === type && m.isBoss) return true;
+    return false;
+}
+
+// 数值表缺该类型时的内置兜底键（旧表 203 已清理）
+export const LEGACY_BY_TYPE: Record<number, string> = { 201: 'melee', 202: 'ranged' };
+
+// 怪物等级 → hp/atk 倍率（仅内置兜底路径使用；数值表路径用精确行）
+export const MONSTER_LEVEL_MUL: Record<number, number> = { 1: 1, 2: 1.5, 3: 2.25, 4: 3.4 };
+
+// 小怪池/Boss 引用条目：type 查数值表；prefab 仅外观（数值不读预制体）
+export interface PoolEntry {
+    type: number;
+    prefab?: Prefab | null;
+}
+
+// 预制体名 → 池条目（编辑器注册；表格 monsterType/boss 列可直接写预制体名）
+const enemyPrefabByName = new Map<string, PoolEntry>();
+export function registerEnemyPrefab(name: string, entry: PoolEntry) {
+    if (name) enemyPrefabByName.set(name, entry);
+}
+
+// 表格条目解析：数字 → 类型 id；名称 → 预制体注册表
+function resolvePoolToken(token: string): PoolEntry | null {
+    if (/^\d+$/.test(token)) return { type: parseInt(token, 10) };
+    return enemyPrefabByName.get(token) || null;
+}
+
+export interface StageCfg {
+    stageId: number;
+    note: string;
+    totalWaves: number;
+    waveLevels: { wave: number; level: number }[];   // battleLevel：波次,等级（小怪与 Boss 共用）
+    monsterTypes: PoolEntry[];                       // monsterType：本关小怪池
+    bossWaves: { wave: number; type: number; prefab?: Prefab | null }[]; // boss：波次,类型
+    monsterNum: [number, number];                    // 单次生成数量区间
+    monsterCd: [number, number];                     // 两次生成间隔区间 ms
+    spawnDurationMs: number;                         // time[0]：每波小怪刷新持续时长
+    bossAtMs: number;                                // time[1]：boss 刷新时刻（相对波开始）
+}
+
+const STAGE_ROWS: {
+    stageId: number; note: string; battleLevel: string; monsterType: string;
+    boss: string; monsterNum: string; monsterCd: string; time: string;
+}[] = [
+    {
+        stageId: 30001, note: '第1关，5波（引导关，无boss）',
+        battleLevel: '1,1;2,4;3,7;4,10;5,13',
+        monsterType: '201',
+        boss: '',
+        monsterNum: '2,3',
+        monsterCd: '1000,2000',
+        time: '30',
+    },
+    {
+        stageId: 30002, note: '第2关，5波',
+        battleLevel: '1,4;2,7;3,10;4,13;5,16',
+        monsterType: '201',
+        boss: '5,211',
+        monsterNum: '2,3',
+        monsterCd: '990,1980',
+        time: '30,15',
+    },
+    {
+        stageId: 30003, note: '第3关，5波',
+        battleLevel: '1,7;2,10;3,13;4,16;5,19',
+        monsterType: '201',
+        boss: '5,212',
+        monsterNum: '2,3',
+        monsterCd: '980,1960',
+        time: '30,15',
+    },
 ];
 
-export const TOTAL_WAVES = WAVE_CONFIG.length;
+// "1,1;2,1;4,2,5,2" → [[1,1],[2,1],[4,2],[5,2]]；逗号/分号（含全角）混用容错，两两配对
+function parsePairs(raw: string): [number, number][] {
+    const nums = raw.split(/[;,，；]/).map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    const out: [number, number][] = [];
+    for (let i = 0; i + 1 < nums.length; i += 2) out.push([nums[i], nums[i + 1]]);
+    return out;
+}
+
+function parseNums(raw: string): number[] {
+    return raw.split(/[;,，；]/).map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+}
+
+// 按分隔符拆出字符串条目（怪物类型/boss 支持数字 id 或预制体名）
+function parseTokens(raw: string): string[] {
+    return raw.split(/[;,，；\s]/).map(s => s.trim()).filter(s => s.length > 0);
+}
+
+function rowToStage(row: typeof STAGE_ROWS[number]): StageCfg {
+    const pairs = parsePairs(row.battleLevel);
+    const nums = parseNums(row.monsterNum);
+    const cds = parseNums(row.monsterCd);
+    const times = parseNums(row.time);
+    return {
+        stageId: row.stageId,
+        note: row.note,
+        waveLevels: pairs.map(([wave, level]) => ({ wave, level })),
+        totalWaves: pairs.length,
+        monsterTypes: parseTokens(row.monsterType)
+            .map(t => resolvePoolToken(t))
+            .filter((t): t is PoolEntry => !!t && !monsterTypeIsBoss(t.type)),
+        bossWaves: parsePairs(row.boss).map(([wave, type]) => ({ wave, type })),
+        monsterNum: [nums[0] || 1, Math.max(nums[0] || 1, nums[1] || nums[0] || 1)],
+        monsterCd: [cds[0] || 1000, Math.max(cds[0] || 1000, cds[1] || cds[0] || 1000)],
+        spawnDurationMs: (times[0] || 30) * 1000,
+        bossAtMs: (times[1] || 15) * 1000,
+    };
+}
+
+// 内置关卡表（策划 stage.xlsx 首版数据；编辑器配置非空时被覆盖）
+const STAGES: StageCfg[] = STAGE_ROWS.map(rowToStage);
+
+// 运行时关卡表（编辑器 StageConfig 注册后替换内置表）
+let stageTable: StageCfg[] = STAGES;
+
+// 注册编辑器配置的关卡（非空时完全替换内置表）
+export function registerStages(list: StageCfg[]) {
+    if (list.length > 0) stageTable = list;
+}
+
+export function allStages(): readonly StageCfg[] {
+    return stageTable;
+}
+
+export function getStage(stageId: number): StageCfg | null {
+    return stageTable.find(s => s.stageId === stageId) || null;
+}
+
+export function firstStageId(): number {
+    return stageTable.length > 0 ? stageTable[0].stageId : 30001;
+}
+
+// 关卡进度（sys.localStorage 三端通用，后期可换云端存档）
+const PROGRESS_KEY = 'wztd_progress_v1';
+
+export function loadProgress(): number { // 已通关的最高 stageId（0 = 一关未通）
+    const raw = sys.localStorage.getItem(PROGRESS_KEY);
+    const n = raw ? parseInt(raw, 10) : 0;
+    return isNaN(n) ? 0 : n;
+}
+
+export function saveStageCleared(stageId: number) {
+    const cur = loadProgress();
+    if (stageId > cur) {
+        sys.localStorage.setItem(PROGRESS_KEY, String(stageId));
+    }
+}
+
+// 下一个关卡 id（按关卡表顺序；已过最后一关返回 null）
+export function nextStageId(stageId: number): number | null {
+    const idx = stageTable.findIndex(s => s.stageId === stageId);
+    if (idx < 0 || idx + 1 >= stageTable.length) return null;
+    return stageTable[idx + 1].stageId;
+}
+
+// 最新可进关卡：已通关关的下一关；未通关过则第一关
+export function unlockedStageId(): number {
+    const cleared = loadProgress();
+    if (!cleared) return firstStageId();
+    return nextStageId(cleared) ?? cleared;
+}
+
+export function stageTotalWaves(stageId: number): number {
+    return getStage(stageId)?.totalWaves || 5;
+}
+
 export const WAVE_PREP_MS = 10000; // 波次等待总时长约 10 秒
 
 // ---------- 城堡 ----------
@@ -201,6 +408,7 @@ export interface SlowState {
 export interface Enemy {
     id: number;
     type: string;
+    level: number;
     x: number;
     y: number;
     hp: number;
@@ -280,6 +488,7 @@ export interface ChooseOption {
 // ---------- 全局状态 ----------
 export const G = {
     scene: 'home' as 'home' | 'battle',
+    stageId: 30001,
     wave: 0,
     waveActive: false,
     castleHP: CASTLE_MAX_HP,
@@ -298,9 +507,11 @@ export const G = {
     paused: false,
     gameOver: false,
     towerCooldowns: {} as Record<string, number>,
-    spawnQueue: [] as { type: string | EnemyCfgExt; delay: number }[],
-    spawnTimer: 0,
+    // 波次运行时（stage 表驱动）
     wavePreDelay: 0,
+    waveStartAt: 0,
+    waveNextSpawnAt: 0,
+    waveBossSpawned: false,
     bossDef: nextBossDef(),
     // 城堡配置保留参数（原型为 0）
     damageReduce: 0,
@@ -309,6 +520,7 @@ export const G = {
 
 export function resetStateForBattle() {
     G.wave = 0;
+    G.stageId = unlockedStageId();
     G.castleHP = CASTLE_MAX_HP;
     G.castleMaxHP = CASTLE_MAX_HP;
     G.items = [];
@@ -323,10 +535,11 @@ export function resetStateForBattle() {
     G.enhanceGlobal = {};
     G.damageReduce = 0;
     G.bloodRegen = 0;
-    G.spawnQueue = [];
-    G.spawnTimer = 0;
     G.waveActive = false;
     G.wavePreDelay = 0;
+    G.waveStartAt = 0;
+    G.waveNextSpawnAt = 0;
+    G.waveBossSpawned = false;
     G.forgeGrid = new Array<string | null>(25).fill(null);
     G.forgePieces = [];
     G.forgeResults = [];
@@ -374,6 +587,11 @@ export function shuffle<T>(arr: T[]) {
         const j = Math.floor(Math.random() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
     }
+}
+
+// [min, max] 闭区间随机整数
+export function randInt(min: number, max: number): number {
+    return min + Math.floor(Math.random() * (max - min + 1));
 }
 
 // 随机生成 n 个独体字

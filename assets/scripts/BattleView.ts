@@ -5,9 +5,10 @@
 // ============================================================
 import { Node, Graphics, Label, UITransform, Vec3, EventTouch, Layers, Prefab, instantiate } from 'cc';
 import {
-    G, TOWER_STATS, TOWER_POSITIONS, CASTLE_POS, ENEMY_TYPES, WAVE_CONFIG,
-    getTowerEffectiveStat, Enemy, Projectile, Particle, EnemyCfgExt,
-    WAVE_PREP_MS,
+    G, TOWER_STATS, TOWER_POSITIONS, CASTLE_POS, ENEMY_TYPES,
+    getTowerEffectiveStat, Enemy, Projectile, Particle,
+    WAVE_PREP_MS, getStage, randInt, MONSTER_LEVEL_MUL,
+    getMonsterStats, LEGACY_BY_TYPE, PoolEntry, MonsterStats,
 } from './Config';
 import { hexColor, makeNode, makeLabel, touchLocal } from './Theme';
 
@@ -43,8 +44,6 @@ export interface BattleApp {
     onMapDragStart(char: string, e: EventTouch): void;
     onMapDragMove(e: EventTouch): void;
     onMapDragEnd(char: string, e: EventTouch): void;
-    /** 某波次的刷怪组（来自 GameApp 编辑器配置）；null = 无配置，回退 WAVE_CONFIG */
-    getWaveGroups(wave: number): { type: string | EnemyCfgExt; count: number; delay: number }[] | null;
     /** 字塔的序列帧预制体；null = 无，用代码绘制 */
     getTowerPrefab(char: string): Prefab | null;
     onWaveClear(): void;
@@ -54,6 +53,15 @@ export interface BattleApp {
 }
 
 let enemyIdSeed = 1;
+
+// 数值表类型 → 绘制色（Boss 用本局轮换 Boss 配色）
+const TABLE_TYPE_COLOR: Record<number, string> = {
+    201: '#e57373', 202: '#64b5f6', 204: '#ba68c8', 205: '#ffb74d',
+};
+// buff 已导入未生效：每行只记一次日志
+const buffLogged = new Set<number>();
+// 数值表缺类型回退内置：每 (类型,等级) 只告警一次
+const legacyWarned = new Set<number>();
 
 export class BattleView {
     node: Node;
@@ -230,25 +238,28 @@ export class BattleView {
         }
     }
 
-    // ---------- 波次 ----------
+    // ---------- 波次（关卡表驱动：stage.xlsx） ----------
     startWave() {
+        const stage = getStage(G.stageId);
+        if (!stage) {
+            this.app.showTip(`关卡 ${G.stageId} 未配置`, 'error');
+            return;
+        }
         G.waveActive = true;
         G.wavePreDelay = WAVE_PREP_MS;
-        // 优先：编辑器预制体配置；回退：代码内 WAVE_CONFIG
-        const fallback = WAVE_CONFIG[G.wave]
-            ? WAVE_CONFIG[G.wave].enemies.map(g => ({ type: g.type, count: g.count, delay: WAVE_CONFIG[G.wave].delay }))
-            : [];
-        const groups = this.app.getWaveGroups(G.wave) ?? fallback;
-        G.spawnQueue = [];
-        let offset = 0;
-        for (const group of groups) {
-            for (let i = 0; i < group.count; i++) {
-                G.spawnQueue.push({ type: group.type, delay: offset + i * group.delay });
-            }
-            offset += group.count * group.delay;
-        }
-        G.spawnTimer = 0;
+        // 波计时在准备倒计时结束时启动（见 update）
+        G.waveStartAt = 0;
+        G.waveNextSpawnAt = 0;
+        G.waveBossSpawned = false;
         this.app.onWaveChanged();
+    }
+
+    // 本波怪物等级（battleLevel 表参数 2）
+    private waveLevel(): number {
+        const stage = getStage(G.stageId);
+        if (!stage) return 1;
+        const e = stage.waveLevels.find(w => w.wave === G.wave + 1);
+        return e ? e.level : 1;
     }
 
     startNextWave() {
@@ -259,9 +270,36 @@ export class BattleView {
         this.startWave();
     }
 
-    private spawnEnemy(source: string | EnemyCfgExt, atX?: number, atY?: number, summonedBy?: number) {
-        const cfg = typeof source === 'string' ? ENEMY_TYPES[source] : source;
-        const type = typeof source === 'string' ? source : cfg.name;
+    // 刷怪：数值查怪物数值表 (type, level)；表缺该类型时回退内置 ENEMY_TYPES × 等级倍率
+    private spawnEnemy(entry: PoolEntry, atX?: number, atY?: number, summonedBy?: number, level = 1, asBoss = false) {
+        const stats = getMonsterStats(entry.type, level);
+        let hp: number, atk: number, speed: number, range: number, isBoss: boolean, attackCd: number;
+        if (stats) {
+            hp = Math.max(1, stats.blood);
+            atk = Math.max(1, stats.attack);
+            speed = stats.speed;
+            range = stats.attackFar;   // 像素，与战场逻辑坐标 1:1
+            isBoss = stats.isBoss || asBoss;
+            attackCd = Math.max(200, stats.attackCd);
+            if ((stats.buffTarget || stats.buffEffect) && !buffLogged.has(stats.monsterId)) {
+                buffLogged.add(stats.monsterId);
+                console.log(`[buff] 未生效 type=${stats.type} lv=${stats.level} target=${stats.buffTarget} effect=${stats.buffEffect} para=${stats.buffEffectPara}`);
+            }
+        } else {
+            const key = asBoss ? 'boss' : (LEGACY_BY_TYPE[entry.type] || 'melee');
+            const base = ENEMY_TYPES[key];
+            const mul = MONSTER_LEVEL_MUL[Math.min(Math.max(level, 1), 4)] || 1;
+            hp = Math.max(1, Math.round(base.hp * mul));
+            atk = Math.max(1, Math.round(base.atk * mul));
+            speed = base.speed;
+            range = base.range;
+            isBoss = base.isBoss;
+            attackCd = base.attackCd;
+            if (!legacyWarned.has(entry.type * 100 + level)) {
+                legacyWarned.add(entry.type * 100 + level);
+                console.warn(`[monster] 数值表缺 类型${entry.type} Lv${level}，回退内置 ${key}×${mul}`);
+            }
+        }
         const margin = 18;
         let x = 0, y = 0;
         if (atX !== undefined && atY !== undefined) {
@@ -277,17 +315,18 @@ export class BattleView {
         }
         const e: Enemy = {
             id: enemyIdSeed++,
-            type,
+            type: String(entry.type),
+            level,
             x, y,
-            hp: cfg.hp,
-            maxHp: cfg.hp,
-            atk: cfg.atk,
-            speed: cfg.speed,
-            range: cfg.range,
-            color: cfg.color,
-            size: cfg.size,
-            isBoss: cfg.isBoss,
-            attackCd: cfg.attackCd,
+            hp,
+            maxHp: hp,
+            atk,
+            speed,
+            range,
+            color: isBoss ? G.bossDef.color : (TABLE_TYPE_COLOR[entry.type] || '#e57373'),
+            size: isBoss ? 14 : 8,
+            isBoss,
+            attackCd,
             lastAttack: 0,
             frozen: 0,
             slow: null,
@@ -296,20 +335,29 @@ export class BattleView {
             dotTimer: 0,
             summonedBy,
         };
-        if (cfg.isBoss) {
-            const ext = cfg as EnemyCfgExt;
-            // 预制体自定义了名字/技能则优先，否则用本局轮换 Boss
-            e.bossName = ext.bossName || G.bossDef.name;
-            e.bossSkill = (ext.bossSkill || G.bossDef.skill) as 'splash' | 'pierce' | 'summon';
-            e.color = (ext.bossName || ext.bossSkill) ? cfg.color : G.bossDef.color;
+        if (isBoss) {
+            e.bossName = G.bossDef.name;
+            e.bossSkill = G.bossDef.skill;
             e.summonTimer = 0;
         }
-        // 序列帧预制体渲染（Animation 的 PlayOnLoad 自动播放）
-        const extCfg = typeof source === 'object' ? source : null;
-        if (extCfg && extCfg.prefab) {
-            const n = instantiate(extCfg.prefab);
+        // 外观渲染：有预制体则实例化（Animation PlayOnLoad 自动播放）；无则显示数值表名字（如 小近战怪 Lv1）
+        if (entry.prefab) {
+            const n = instantiate(entry.prefab);
             n.layer = Layers.Enum.UI_2D;
             n.setParent(this.node);
+            n.setPosition(x, y);
+            e.viewNode = n;
+        } else {
+            const n = new Node('enemy-label');
+            n.layer = Layers.Enum.UI_2D;
+            n.setParent(this.node);
+            n.addComponent(UITransform);
+            const lb = n.addComponent(Label);
+            lb.string = stats ? stats.name : `类型${entry.type} Lv${level}`;
+            lb.fontSize = isBoss ? 12 : 10;
+            lb.lineHeight = (isBoss ? 12 : 10) + 2;
+            lb.isBold = true;
+            lb.color = hexColor(e.color);
             n.setPosition(x, y);
             e.viewNode = n;
         }
@@ -333,20 +381,38 @@ export class BattleView {
         }
         if (this.castleFlash > 0) this.castleFlash -= dtMs;
 
-        // 波次等待倒计时（约 10 秒准备时间）
+        // 波次等待倒计时（约 10 秒准备时间），结束时启动本波计时
         if (G.waveActive && G.wavePreDelay > 0) {
             G.wavePreDelay -= dtMs;
             if (G.wavePreDelay > 0) return;
             G.wavePreDelay = 0;
+            G.waveStartAt = this.timeMs;
+            G.waveNextSpawnAt = this.timeMs;
         }
 
-        // 按延迟队列刷新敌人
-        if (G.waveActive && G.spawnQueue.length > 0) {
-            G.spawnTimer += dtMs;
-            while (G.spawnQueue.length > 0 && G.spawnTimer >= G.spawnQueue[0].delay) {
-                const entry = G.spawnQueue.shift()!;
-                this.spawnEnemy(entry.type);
-                G.spawnTimer -= entry.delay;
+        // 关卡表驱动：刷新期内按随机间隔/数量从小怪池刷怪，到点插入 Boss
+        if (G.waveActive && G.wavePreDelay <= 0) {
+            const stage = getStage(G.stageId);
+            if (stage) {
+                const elapsed = this.timeMs - G.waveStartAt;
+                const waveNo = G.wave + 1;
+                const lv = this.waveLevel();
+                if (elapsed < stage.spawnDurationMs && this.timeMs >= G.waveNextSpawnAt) {
+                    const count = randInt(stage.monsterNum[0], stage.monsterNum[1]);
+                    for (let i = 0; i < count && stage.monsterTypes.length > 0; i++) {
+                        const type = stage.monsterTypes[Math.floor(Math.random() * stage.monsterTypes.length)];
+                        this.spawnEnemy(type, undefined, undefined, undefined, lv);
+                    }
+                    G.waveNextSpawnAt = this.timeMs + randInt(stage.monsterCd[0], stage.monsterCd[1]);
+                }
+                const bossCfg = stage.bossWaves.find(b => b.wave === waveNo);
+                if (bossCfg && !G.waveBossSpawned && elapsed >= stage.bossAtMs) {
+                    G.waveBossSpawned = true;
+                    this.spawnEnemy(bossCfg, undefined, undefined, undefined, lv, true);
+                    const b = G.enemies[G.enemies.length - 1];
+                    this.rings.push({ x: b.x, y: b.y, maxR: 60, color: '#ffe082', life: 400 });
+                    this.addFloater(b.x, b.y + b.size + 10, (b.bossName || 'BOSS') + ' 出现', '#ffe082');
+                }
             }
         }
 
@@ -409,7 +475,7 @@ export class BattleView {
                     const alive = G.enemies.filter(m => m.summonedBy === enemy.id && m.hp > 0).length;
                     if (alive < 3) {
                         enemy.summonTimer = 0;
-                        this.spawnEnemy('melee', enemy.x + (Math.random() - 0.5) * 40, enemy.y + (Math.random() - 0.5) * 40, enemy.id);
+                        this.spawnEnemy({ type: 201 }, enemy.x + (Math.random() - 0.5) * 40, enemy.y + (Math.random() - 0.5) * 40, enemy.id, enemy.level);
                         this.rings.push({ x: enemy.x, y: enemy.y, maxR: 26, color: '#b0ff6b', life: 240 });
                     } else {
                         enemy.summonTimer = 3000;
@@ -554,13 +620,20 @@ export class BattleView {
         }
         G.enemies = G.enemies.filter(e => e.hp > 0);
 
-        // 波次结束判定
-        if (G.waveActive && G.spawnQueue.length === 0 && G.enemies.length === 0) {
-            G.waveActive = false;
-            if (G.bloodRegen > 0) {
-                G.castleHP = Math.min(G.castleMaxHP, G.castleHP + G.bloodRegen * 5);
+        // 波次结束判定：刷新时长结束 + 该波 Boss 已出场（若有）+ 场上清空
+        if (G.waveActive && G.wavePreDelay <= 0) {
+            const stage = getStage(G.stageId);
+            if (stage) {
+                const elapsed = this.timeMs - G.waveStartAt;
+                const bossPending = stage.bossWaves.some(b => b.wave === G.wave + 1) && !G.waveBossSpawned;
+                if (elapsed >= stage.spawnDurationMs && !bossPending && G.enemies.length === 0) {
+                    G.waveActive = false;
+                    if (G.bloodRegen > 0) {
+                        G.castleHP = Math.min(G.castleMaxHP, G.castleHP + G.bloodRegen * 5);
+                    }
+                    this.app.onWaveClear();
+                }
             }
-            this.app.onWaveClear();
         }
     }
 
@@ -730,18 +803,19 @@ export class BattleView {
             if (enemy.hp <= 0) continue;
             const size = enemy.size;
             if (enemy.viewNode) {
-                // 序列帧节点：仅同步位置（血条/状态圈仍由 Graphics 绘制）
+                // 序列帧/名字文本节点：仅同步位置（血条/状态圈仍由 Graphics 绘制）
                 enemy.viewNode.setPosition(enemy.x, enemy.y);
             } else {
                 g.fillColor = hexColor(enemy.color);
                 g.circle(enemy.x, enemy.y, size);
                 g.fill();
-                if (enemy.isBoss) {
-                    g.strokeColor = hexColor('#ffe082');
-                    g.lineWidth = 2;
-                    g.circle(enemy.x, enemy.y, size + 3);
-                    g.stroke();
-                }
+            }
+            // Boss 金圈指示（无论预制体/文本/圆点都显示）
+            if (enemy.isBoss) {
+                g.strokeColor = hexColor('#ffe082');
+                g.lineWidth = 2;
+                g.circle(enemy.x, enemy.y, size + 3);
+                g.stroke();
             }
             const now = this.timeMs;
             if (enemy.frozen > 0) {
