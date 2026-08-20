@@ -1,0 +1,43 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8"><title>导表报告 · 文字塔防</title>
+<style>
+body{font-family:"Microsoft YaHei",sans-serif;background:#141822;color:#dfe6f3;margin:0;padding:32px}
+h1{font-size:22px} h2{font-size:16px;margin-top:28px;color:#9fb3d9}
+.meta{color:#8a93a8;font-size:13px}
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:10px}
+th,td{border:1px solid #2a3244;padding:6px 9px;text-align:left}
+th{background:#1c2233;color:#aac4e8}
+tr:nth-child(even) td{background:#181e2c}
+.kpi{display:flex;gap:14px;margin-top:16px}
+.kpi div{flex:1;background:#1c2233;border:1px solid #2a3244;border-radius:10px;padding:12px 16px}
+.kpi b{font-size:22px;display:block;color:#4ecdc4}
+.kpi span{font-size:12px;color:#8a93a8}
+li{font-size:13px;line-height:1.7} .ok{color:#7ce8c8}
+</style></head><body>
+<h1>文字塔防 · 导表报告</h1>
+<p class="meta">导出时间：2026-08-20 16:51:31　|　源表：表格/stage.xlsx、表格/monster.xlsx　|　产物：assets/resources/stages.json、monsters.json</p>
+<div class="kpi">
+<div><b>50</b><span>关卡（30001 ~ 30050）</span></div>
+<div><b>1400</b><span>怪物数值行</span></div>
+<div><b>14</b><span>怪物类型（Boss 10）</span></div>
+<div><b>1</b><span>警告</span></div>
+<div><b>0</b><span>错误</span></div>
+</div>
+<h2>怪物类型一览</h2><table><tr><th>类型</th><th>名称</th><th>定位</th><th>等级行数</th></tr><tr><td>201</td><td>小近战怪</td><td>小怪</td><td>100</td></tr><tr><td>202</td><td>小远程怪</td><td>小怪</td><td>100</td></tr><tr><td>204</td><td>高速小怪</td><td>小怪</td><td>100</td></tr><tr><td>205</td><td>坦克小怪</td><td>小怪</td><td>100</td></tr><tr><td>211</td><td>近战重甲boss</td><td>Boss</td><td>100</td></tr><tr><td>212</td><td>远程射手boss</td><td>Boss</td><td>100</td></tr><tr><td>213</td><td>冲锋先锋boss</td><td>Boss</td><td>100</td></tr><tr><td>214</td><td>血肉巨兽boss</td><td>Boss</td><td>100</td></tr><tr><td>215</td><td>召唤领主boss</td><td>Boss</td><td>100</td></tr><tr><td>216</td><td>分裂核心boss</td><td>Boss</td><td>100</td></tr><tr><td>217</td><td>狂暴战士boss</td><td>Boss</td><td>100</td></tr><tr><td>218</td><td>护盾守卫boss</td><td>Boss</td><td>100</td></tr><tr><td>219</td><td>双生魔boss</td><td>Boss</td><td>100</td></tr><tr><td>220</td><td>自爆先锋boss</td><td>Boss</td><td>100</td></tr></table>
+<h2>关卡抽样（前 10 关，全量见 stages.json）</h2>
+<table><tr><th>stageId</th><th>备注</th><th>battleLevel</th><th>小怪池</th><th>boss</th><th>数量</th><th>间隔ms</th><th>time</th></tr>
+<tr><td>30001</td><td>第1关，5波（引导关，无boss）</td><td>1,1;2,4;3,7;4,10;5,13</td><td>201</td><td>—</td><td>2,3</td><td>1000,2000</td><td>30</td></tr>
+<tr><td>30002</td><td>第2关，5波</td><td>1,4;2,7;3,10;4,13;5,16</td><td>201</td><td>5,211</td><td>2,3</td><td>990,1980</td><td>30,15</td></tr>
+<tr><td>30003</td><td>第3关，5波</td><td>1,7;2,10;3,13;4,16;5,19</td><td>201</td><td>5,212</td><td>2,3</td><td>980,1960</td><td>30,15</td></tr>
+<tr><td>30004</td><td>第4关，5波</td><td>1,10;2,13;3,16;4,19;5,22</td><td>201</td><td>5,213</td><td>2,3</td><td>970,1940</td><td>30,15</td></tr>
+<tr><td>30005</td><td>第5关，6波</td><td>1,13;2,15;3,18;4,20;5,23;6,25</td><td>201</td><td>6,214</td><td>2,3</td><td>960,1920</td><td>30,15</td></tr>
+<tr><td>30006</td><td>第6关，6波</td><td>1,16;2,18;3,21;4,23;5,26;6,28</td><td>201,202</td><td>6,215</td><td>2,3</td><td>950,1900</td><td>30,15</td></tr>
+<tr><td>30007</td><td>第7关，6波</td><td>1,19;2,21;3,24;4,26;5,29;6,31</td><td>201,202</td><td>6,216</td><td>2,3</td><td>940,1880</td><td>30,15</td></tr>
+<tr><td>30008</td><td>第8关，6波</td><td>1,22;2,24;3,27;4,29;5,32;6,34</td><td>201,202</td><td>6,217</td><td>2,3</td><td>930,1860</td><td>30,15</td></tr>
+<tr><td>30009</td><td>第9关，7波</td><td>1,25;2,27;3,29;4,31;5,33;6,35;7,37</td><td>201,202</td><td>7,218</td><td>2,3</td><td>920,1840</td><td>30,15</td></tr>
+<tr><td>30010</td><td>第10关，7波</td><td>1,28;2,30;3,32;4,34;5,36;6,38;7,40</td><td>201,202</td><td>7,219</td><td>2,3</td><td>910,1820</td><td>30,15</td></tr></table>
+<h2>警告（不阻塞导出）</h2><ul><li>stage 30035：monsterCd 单元格是数字 6601320（Excel 千分位吞了逗号），按 660,1320 处理</li></ul>
+<h2>优先级说明</h2>
+<ul><li>运行时数据链：<b>stages.json / monsters.json</b>（本次导出）→ 编辑器同 id 覆盖（临时调参）→ 内置表</li>
+<li>怪物外观预制体：放 <b>assets/resources/enemies/&lt;类型号或怪物名&gt;.prefab</b> 自动绑定（如 201.prefab、211.prefab）</li>
+<li>buff 三列（buffTarget/buffEffect/buffEffectPara）已导入，暂不生效（战斗内打日志）</li></ul>
+</body></html>

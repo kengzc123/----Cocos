@@ -8,8 +8,9 @@ import {
     G, TOWER_STATS, TOWER_POSITIONS, MAX_LEVEL, resetStateForBattle,
     openingChars, ForgePiece, stageTotalWaves, registerStages, allStages,
     registerMonsters, monsterRowCount, saveStageCleared, nextStageId, getStage,
-    StageCfg, loadProgress, unlockedStageId,
+    StageCfg, loadProgress, unlockedStageId, setStageBaseFromRows, overrideStagesByEditor,
 } from './Config';
+import { loadTables, loadEnemyPrefabs } from './StageLoader';
 import {
     hexColor, makeNode, makeLabel, fillRoundRect, strokeRoundRect, THEME, setTouchCamera,
 } from './Theme';
@@ -171,6 +172,32 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
         this.showBattleUI(false);
         this.rebuildHomeStageGrid();
         this.refreshHomeStageLabel();
+
+        // 9. 批量导入（resources json 由「导表.bat」生成；未导入时回退编辑器/内置表）
+        this.startImport();
+    }
+
+    // 异步加载导表 json：成功后设为基表，编辑器手动配置按 id 覆盖回填；失败静默回退
+    private startImport() {
+        loadTables().then(data => {
+            setStageBaseFromRows(data.stageRows);                    // json 关卡基表
+            if (this.stages.length > 0) {
+                overrideStagesByEditor(this.stages.map(s => s.toCfg())); // 手动关卡覆盖同 id（临时调参）
+            }
+            registerMonsters(data.monsters);                          // json 怪物基表
+            registerMonsters(this.monsters.map(m => m.toStats()));    // 手动行覆盖同 id（临时调参）
+            console.log(`[import] json 生效：${data.stageRows.length} 关 + ${data.monsters.length} 行怪物数值`
+                + `（编辑器覆盖 ${this.stages.length} 关 / ${this.monsters.length} 行）`);
+            return loadEnemyPrefabs().then(bound => {
+                if (bound > 0) console.log(`[import] enemies/ 预制体绑定 ${bound} 个`);
+                this.selectedStageId = unlockedStageId();
+                this.rebuildHomeStageGrid();   // 关卡表从内置 3 关变为 json N 关，刷新主页网格
+                this.refreshHomeStageLabel();
+            });
+        }).catch(() => {
+            console.log('[import] 未找到导表 json（assets/resources/stages.json / monsters.json），'
+                + '使用编辑器/内置数据；批量导入请双击项目根目录「导表.bat」');
+        });
     }
 
     private buildTopBar() {

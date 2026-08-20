@@ -223,9 +223,24 @@ export function registerEnemyPrefab(name: string, entry: PoolEntry) {
     if (name) enemyPrefabByName.set(name, entry);
 }
 
-// 表格条目解析：数字 → 类型 id；名称 → 预制体注册表
+// 数值表里 类型 → 名（去 Lv 后缀），用于中文名预制体绑定（如 小近战怪.prefab）
+export function monsterTypeByName(name: string): number | null {
+    const key = name.replace(/\s*Lv\d+\s*$/, '').trim();
+    if (!key) return null;
+    for (const m of monsterDB.values()) {
+        if (m.name.replace(/\s*Lv\d+\s*$/, '').trim() === key) return m.type;
+    }
+    return null;
+}
+
+// 按类型取池条目：数字名预制体（201.prefab）已注册时自动带上外观
+export function poolEntryForType(type: number): PoolEntry {
+    return enemyPrefabByName.get(String(type)) || { type };
+}
+
+// 表格条目解析：数字 → 类型 id（数字名预制体优先）；名称 → 预制体注册表
 function resolvePoolToken(token: string): PoolEntry | null {
-    if (/^\d+$/.test(token)) return { type: parseInt(token, 10) };
+    if (/^\d+$/.test(token)) return enemyPrefabByName.get(token) || { type: parseInt(token, 10) };
     return enemyPrefabByName.get(token) || null;
 }
 
@@ -313,15 +328,34 @@ function rowToStage(row: typeof STAGE_ROWS[number]): StageCfg {
     };
 }
 
-// 内置关卡表（策划 stage.xlsx 首版数据；编辑器配置非空时被覆盖）
+// 内置关卡表（策划 stage.xlsx 首版数据；批量导入/编辑器配置生效后被覆盖）
 const STAGES: StageCfg[] = STAGE_ROWS.map(rowToStage);
 
-// 运行时关卡表（编辑器 StageConfig 注册后替换内置表）
+// 运行时关卡表（批量导入 setStageBaseFromRows / 编辑器 registerStages 后替换内置表）
 let stageTable: StageCfg[] = STAGES;
 
-// 注册编辑器配置的关卡（非空时完全替换内置表）
+// 表格原始行（stages.json / 内置 STAGE_ROWS 共用形状）
+export interface StageRawRow {
+    stageId: number; note: string; battleLevel: string; monsterType: string;
+    boss: string; monsterNum: string; monsterCd: string; time: string;
+}
+
+// 批量导入基表（stages.json）：完全替换内置表
+export function setStageBaseFromRows(rows: StageRawRow[]) {
+    if (rows.length > 0) stageTable = rows.map(rowToStage);
+}
+
+// 注册编辑器配置的关卡（无 json 基表时：非空整体替换内置表）
 export function registerStages(list: StageCfg[]) {
     if (list.length > 0) stageTable = list;
+}
+
+// 编辑器关卡按 stageId 覆盖 json 基表（临时调参：同 id 替换，新 id 追加）
+export function overrideStagesByEditor(list: StageCfg[]) {
+    if (list.length === 0) return;
+    const map = new Map(stageTable.map(s => [s.stageId, s]));
+    for (const s of list) map.set(s.stageId, s);
+    stageTable = [...map.values()].sort((a, b) => a.stageId - b.stageId);
 }
 
 export function allStages(): readonly StageCfg[] {

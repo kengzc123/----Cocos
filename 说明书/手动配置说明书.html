@@ -262,17 +262,25 @@
 <p>本轮改版字段有更名（monsterPrefabs → monsterPool、Boss 由预制体改为类型号），旧数据不兼容需按新结构重配一次；或运行过 <code>gen_project.js</code> 重置了场景。</p>
 
 <!-- ============ 8 ============ -->
-<h2 id="batch">八、批量导入预告（编辑器链路跑通后实施）</h2>
-<p>手动配数验证通过后，将提供导表脚本实现全自动导入，手动配置届时仅用于临时调参：</p>
+<h2 id="batch">八、批量导入（已实现，双击即用）</h2>
+<h3>操作步骤</h3>
+<ol>
+  <li>策划表放 <span class="path">表格\stage.xlsx</span> 和 <span class="path">表格\monster.xlsx</span>（保持原格式：第1行英文表头、第2行中文说明、第3行起数据）</li>
+  <li>双击项目根目录 <b>导表.bat</b>（首次运行自动装依赖；也可命令行 <code>node tools\export_tables.js</code>）</li>
+  <li>看到「√ 已写出 …stages.json / monsters.json / 导表报告.html」即成功；校验有 error 时会指出哪关哪行，修表后重跑</li>
+  <li>回到 Cocos Creator 等资源刷新，运行游戏，控制台出现 <code>[import] json 生效：50 关 + 1400 行怪物数值</code> 即生效；主页关卡网格自动变为 50 关（4 页）</li>
+</ol>
+<h3>产物与优先级</h3>
 <ul>
-  <li><span class="path">tools/export_tables.js</span>：读 stage.xlsx + monster.xlsx → 生成 <span class="path">assets/resources/stages.json</span> + <span class="path">monsters.json</span>（50 关 + 1400 行全量）</li>
-  <li>预制体按「文件名 = 类型号」自动配对（<code>201.prefab</code> → 类型 201），无需在关卡里手拖</li>
-  <li>导出前自动校验：monsterId 唯一、类型×等级连续、关卡引用覆盖、Boss 标记、time 单值容错</li>
-  <li>优先级：json 导入 &gt; 编辑器配置 &gt; 内置表</li>
-  <li>策划工作流：改表 → 双击导出 → 进游戏即生效</li>
+  <li><span class="path">assets/resources/stages.json</span> + <span class="path">monsters.json</span>：运行时自动预载；<span class="path">导表报告.html</span> 双击查看导入摘要与警告</li>
+  <li>优先级：<b>json 基表 &gt; 编辑器同 id 覆盖 &gt; 内置表</b>——编辑器里手动配的关卡/怪物行按 stageId / (类型,等级) 覆盖 json 对应条目，用于临时调参；清空编辑器数组则完全用 json</li>
+  <li>未导入 json 时控制台提示「未找到导表 json」，自动回退编辑器/内置数据，不影响运行</li>
+  <li>怪物外观预制体放 <span class="path">assets/resources/enemies\</span> 目录，<b>文件名 = 类型号或怪物名</b>自动绑定（201.prefab、211.prefab、小近战怪.prefab 均可）</li>
+  <li>buff 三列（buffTarget / buffEffect / buffEffectPara）已导入暂不生效，刷新怪物时控制台打 <code>[buff] 未生效 …</code> 日志</li>
+  <li>Excel 千分位坑：填「660,1320」若 Excel 存成了数字 6601320，导表自动按 660,1320 修复并给警告（已在 30035 关遇到）</li>
 </ul>
 
-<footer>文字塔防原型 · 手动配置说明书 v1.0 ｜ 工程目录：e:\易游记灵境\文字塔防最新\文字塔防Cocos ｜ 配套代码：Config.ts / StageConfig.ts / MonsterTableConfig.ts / BattleView.ts</footer>
+<footer>文字塔防原型 · 手动配置说明书 v1.1 ｜ 工程目录：e:\易游记灵境\文字塔防最新\文字塔防Cocos ｜ 配套代码：Config.ts / StageConfig.ts / MonsterTableConfig.ts / BattleView.ts / StageLoader.ts / tools\export_tables.js</footer>
 </div>
 </body>
 </html>

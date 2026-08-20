@@ -1,0 +1,11 @@
+{
+  "name": "wztd-table-tools",
+  "private": true,
+  "description": "文字塔防 导表工具：stage.xlsx / monster.xlsx → resources json",
+  "scripts": {
+    "export": "node export_tables.js"
+  },
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

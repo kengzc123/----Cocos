@@ -108,9 +108,16 @@
 }
 ```
 
-### 方式三：批量导入（规划中，编辑器链路跑通后实施）
+### 方式三：批量导入（xlsx → json，已实现）
 
-`tools/export_tables.js` 读 stage.xlsx + monster.xlsx → `resources/stages.json` + `monsters.json`，运行时 `StageLoader` 预载注册，优先级：json 导入 > 编辑器配置 > 内置表。导出前校验：monsterId 唯一、类型×等级连续、stage 引用覆盖、Boss 标记、time 单值容错。
+策划表放 `表格/stage.xlsx`、`表格/monster.xlsx`（表头行 + 中文说明行 + 数据行）→ 双击项目根目录 **`导表.bat`**（或 `node tools/export_tables.js`）→ 生成：
+
+- `assets/resources/stages.json` + `assets/resources/monsters.json`（运行时 `StageLoader` 自动预载注册）
+- `导表报告.html`（导入摘要：关数/行数/类型/校验警告，双击查看）
+
+导出前校验（错误阻塞导出、警告放行）：stageId/monsterId 唯一、battleLevel/boss 成对、monsterNum/monsterCd/time 合法、Boss 类型标记、小怪池不含 Boss、引用 (类型,等级) 覆盖（缺行警告）、Excel 千分位吞逗号自动修复（如 6601320 → 660,1320）。
+
+优先级：**json 基表 > 编辑器同 id 覆盖（临时调参）> 内置表**。怪物外观预制体放 `assets/resources/enemies/<类型号或怪物名>.prefab` 自动按名绑定（如 `201.prefab`、`小近战怪.prefab`）。buff 三列（buffTarget/buffEffect/buffEffectPara）已导入暂不生效（战斗内打日志）。首次运行 bat 自动 `npm install`（依赖 SheetJS，已装于 `tools/node_modules`）。
 
 ### 运行逻辑
 
