@@ -18,6 +18,7 @@ import { BattleView, BattleApp } from './BattleView';
 import { ItemBar, ItemBarApp } from './ItemBar';
 import { ForgePanel, ForgeApp } from './ForgePanel';
 import { Modals, ModalsApp } from './Modals';
+import { EnemyIntel } from './EnemyIntel';
 import { TowerConfig } from './TowerConfig';
 import { StageConfig } from './StageConfig';
 import { MonsterRow } from './MonsterTableConfig';
@@ -55,6 +56,7 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
     itemBar!: ItemBar;
     forge!: ForgePanel;
     modals!: Modals;
+    enemyIntel!: EnemyIntel;
 
     // 字塔预制体配置（编辑器检查器中编辑；TowerConfig 数值覆盖内置，序列帧自动播放）
     @property({ type: [TowerPrefabEntry], tooltip: '字塔预制体：挂 TowerConfig（可加 Sprite+Animation 序列帧）' })
@@ -169,6 +171,9 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
         this.selectedStageId = unlockedStageId();
         this.buildHomeScene();
 
+        // 9. 敌人情报（主页之上，默认隐藏）
+        this.enemyIntel = new EnemyIntel(this.root);
+
         this.showBattleUI(false);
         this.rebuildHomeStageGrid();
         this.refreshHomeStageLabel();
@@ -273,6 +278,18 @@ export class GameApp extends Component implements BattleApp, ItemBarApp, ForgeAp
         makeLabel(n, '文 字 塔 防', 34, THEME.text).node.setPosition(0, 250);
         makeLabel(n, '汉字象形守卫 · 原型', 12, THEME.muted, false).node.setPosition(0, 218);
         makeLabel(n, '拖字上阵 · 拖字入盘合成 · 守住城堡', 11, THEME.muted, false).node.setPosition(0, 196);
+
+        // 敌人情报按钮（右上角）
+        const intelBtn = makeNode('btn-intel', 96, 36);
+        intelBtn.setParent(n);
+        intelBtn.setPosition(120, 384);
+        const ig = intelBtn.addComponent(Graphics);
+        fillRoundRect(ig, -48, -18, 96, 36, 10, hexColor('#2a3244'));
+        strokeRoundRect(ig, -48, -18, 96, 36, 10, hexColor(THEME.border), 1);
+        makeLabel(intelBtn, '敌人情报', 13, THEME.accent, false);
+        intelBtn.on(Node.EventType.TOUCH_END, () => {
+            this.enemyIntel.open(this.selectedStageId);
+        });
 
         // 关卡选择面板
         const panel = makeNode('stage-panel', 350, 330);

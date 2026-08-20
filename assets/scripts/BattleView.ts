@@ -54,8 +54,8 @@ export interface BattleApp {
 
 let enemyIdSeed = 1;
 
-// 数值表类型 → 绘制色（Boss 用本局轮换 Boss 配色）
-const TABLE_TYPE_COLOR: Record<number, string> = {
+// 数值表类型 → 绘制色（Boss 用本局轮换 Boss 配色；敌人情报面板复用）
+export const TABLE_TYPE_COLOR: Record<number, string> = {
     201: '#e57373', 202: '#64b5f6', 204: '#ba68c8', 205: '#ffb74d',
 };
 // buff 已导入未生效：每行只记一次日志
